@@ -1,0 +1,16 @@
+[build]
+  publish = "."
+
+# 백엔드의 헬스 체크는 /api가 아닌 /health 경로입니다.
+[[redirects]]
+  from = "/api/health"
+  to = "https://gumi-2team-bankend-2.onrender.com/health"
+  status = 200
+  force = true
+
+# 프론트의 /api/* 요청을 Render 백엔드의 /api/*로 전달합니다.
+[[redirects]]
+  from = "/api/*"
+  to = "https://gumi-2team-bankend-2.onrender.com/api/:splat"
+  status = 200
+  force = true

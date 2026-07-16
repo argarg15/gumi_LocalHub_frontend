@@ -1,0 +1,7 @@
+{
+  "name": "localhub-gumi-frontend",
+  "private": true,
+  "scripts": {
+    "start": "node dev-server.js"
+  }
+}

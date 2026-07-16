@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>localhub gumi - 구미시 통합 지역 정보 패키지</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Vue 3 Composition API -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts - Pretendard & Noto Sans KR -->
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.tailwindcss.com/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+            background-color: #f8fafc;
+        }
+        .impact-title {
+            font-family: 'Noto Sans KR', sans-serif;
+            font-weight: 900;
+            letter-spacing: -0.05em;
+        }
+        /* 부드러운 전환 효과 */
+        .fade-enter-active, .fade-leave-active {
+            transition: opacity 0.25s ease, transform 0.25s ease;
+        }
+        .fade-enter-from, .fade-leave-to {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        
+        /* 지도 백그라운드 격자선 디자인 */
+        .map-grid {
+            background-image: radial-gradient(rgba(59, 130, 246, 0.15) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+    </style>
+</head>
+<body class="text-slate-800 antialiased bg-slate-50">
+
+<div id="app" class="min-h-screen flex flex-col">
+    <!-- 네비게이션 바 -->
+    <header class="sticky top-0 z-40 bg-slate-900 text-white border-b border-slate-800 shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- 로고 영역 -->
+                <div class="flex items-center space-x-3 cursor-pointer" @click="currentTab = 'home'">
+                    <div class="p-2 bg-blue-600 rounded-lg text-white shadow-lg shadow-blue-500/30">
+                        <i data-lucide="map-pin" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <span class="text-xl impact-title tracking-tight bg-gradient-to-r from-white via-slate-100 to-blue-400 bg-clip-text text-transparent uppercase">
+                            localhub gumi
+                        </span>
+                        <span class="hidden sm:inline-block ml-2 text-[10px] font-semibold px-2 py-0.5 bg-blue-900/80 text-blue-300 rounded border border-blue-700">
+                            통합 로컬 서비스
+                        </span>
+                    </div>
+                </div>
+
+                <!-- 메인 탭 네비게이션 -->
+                <nav class="hidden md:flex space-x-1 items-center">
+                    <button 
+                        v-for="tab in tabs" 
+                        :key="tab.id"
+                        @click="currentTab = tab.id"
+                        :class="[
+                            'px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center space-x-2',
+                            currentTab === tab.id 
+                                ? 'bg-blue-600 text-white shadow-md' 
+                                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                        ]"
+                    >
+                        <i :data-lucide="tab.icon" class="w-4 h-4"></i>
+                        <span>{{ tab.name }}</span>
+                    </button>
+                </nav>
+
+                <!-- 모바일 메뉴 버튼 -->
+                <div class="md:hidden flex items-center">
+                    <button @click="mobileMenuOpen = !mobileMenuOpen" class="p-2 rounded-lg text-slate-300 hover:bg-slate-800">
+                        <i :data-lucide="mobileMenuOpen ? 'x' : 'menu'" class="w-6 h-6"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 모바일 드롭다운 메뉴 -->
+        <div v-if="mobileMenuOpen" class="md:hidden bg-slate-900 border-t border-slate-800 px-2 pt-2 pb-4 space-y-1">
+            <button 
+                v-for="tab in tabs" 
+                :key="tab.id"
+                @click="currentTab = tab.id; mobileMenuOpen = false"
+                class="w-full text-left px-4 py-3 rounded-lg text-base font-semibold flex items-center space-x-3 text-slate-300 hover:bg-slate-800 hover:text-white"
+                :class="{'bg-blue-600 text-white': currentTab === tab.id}"
+            >
+                <i :data-lucide="tab.icon" class="w-5 h-5"></i>
+                <span>{{ tab.name }}</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- 메인 콘텐츠 영역 -->
+    <main class="flex-grow">
+        <!-- 1. HOME 대시보드 -->
+        <div v-if="currentTab === 'home'" class="fade-in">
+            <!-- 히어로 영역 -->
+            <section class="relative bg-slate-950 text-white py-24 px-4 overflow-hidden border-b border-slate-800">
+                <div class="absolute inset-0 opacity-10 bg-[radial-gradient(#3b82f6_1.5px,transparent_1.5px)] [background-size:24px_24px]"></div>
+                <div class="absolute -top-40 -right-40 w-96 h-96 bg-blue-600/30 rounded-full filter blur-3xl"></div>
+                <div class="absolute -bottom-40 -left-40 w-96 h-96 bg-indigo-600/20 rounded-full filter blur-3xl"></div>
+
+                <div class="max-w-5xl mx-auto relative z-10 text-center">
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/30 mb-5 uppercase tracking-widest">
+                        Gumi Tour & Culture Hub
+                    </span>
+                    <h1 class="text-4xl md:text-6xl impact-title mb-6 leading-tight tracking-tight">
+                        자연, 문화, 레포츠의 조화 <br class="sm:hidden">
+                        <span class="bg-gradient-to-r from-blue-400 via-sky-300 to-indigo-400 bg-clip-text text-transparent">다채로운 구미</span>를 발견하다
+                    </h1>
+                    <p class="text-base md:text-lg text-slate-300 max-w-2xl mx-auto font-light leading-relaxed mb-6">
+                        구미·경북권 8대 관광 데이터부터 <br class="hidden md:inline">
+                        시민들이 직접 추천하는 살아있는 로컬 히든 플레이스까지 편리하게 탐색해 보세요.
+                    </p>
+                    <div class="flex justify-center items-center mt-6">
+                        <button 
+                            @click="currentTab = 'directory'"
+                            class="w-full sm:w-auto bg-blue-600 hover:bg-blue-50 text-white text-sm font-semibold px-10 py-4 rounded-xl transition duration-200 flex items-center justify-center space-x-2 shadow-lg shadow-blue-600/30"
+                        >
+                            <span>종합 디렉토리 탐색</span>
+                            <i data-lucide="compass" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 8대 핵심 테마 인덱스 카드 -->
+            <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+                <div class="text-center mb-12">
+                    <h2 class="text-3xl impact-title text-slate-900">구미·경북권 관광 데이터 8개 분야</h2>
+                    <p class="text-slate-500 mt-2">관광지, 레포츠, 문화시설, 쇼핑, 숙박, 여행코스, 음식점, 축제공연행사를 탐색해보세요.</p>
+                </div>
+
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div 
+                        v-for="cat in categories" 
+                        :key="cat.id"
+                        @click="goToCategory(cat.name)"
+                        class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-lg hover:border-blue-300 transition-all duration-200 cursor-pointer text-center group"
+                    >
+                        <div class="w-12 h-12 mx-auto rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-4 group-hover:bg-blue-600 group-hover:text-white transition-all duration-300">
+                            <i :data-lucide="cat.icon" class="w-6 h-6"></i>
+                        </div>
+                        <h3 class="text-sm font-bold text-slate-900">{{ cat.name }}</h3>
+                        <p class="text-[11px] text-slate-400 mt-1">{{ cat.desc }}</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 추천게시판 바로가기 프리뷰 배너 -->
+            <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
+                <div class="bg-gradient-to-r from-blue-900 via-indigo-950 to-slate-900 rounded-3xl p-8 md:p-12 shadow-xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8">
+                    <div class="max-w-xl relative z-10">
+                        <span class="bg-blue-500/20 text-blue-300 text-xs px-3 py-1 rounded-full font-semibold border border-blue-500/30">COMMUNITY PORTAL</span>
+                        <h3 class="text-2xl md:text-3xl impact-title text-white mt-4 mb-3">숨겨진 구미의 매력을 실시간 공유하세요</h3>
+                        <p class="text-slate-300 text-sm leading-relaxed font-light">
+                            나만 알기 아까운 최고의 선산곱창 맛집, 숨겨진 전망 좋은 캠핑장, 한산한 산책로가 있나요? 
+                            익명 추천 게시판에 등록해 다른 사람들과 로컬 트렌드를 자유롭게 소통해보세요.
+                        </p>
+                    </div>
+                    <div class="flex-shrink-0 relative z-10 w-full md:w-auto">
+                        <button 
+                            @click="currentTab = 'board'"
+                            class="w-full md:w-auto bg-white text-slate-900 font-bold px-6 py-4 rounded-xl hover:bg-slate-100 transition shadow-lg flex items-center justify-center space-x-2"
+                        >
+                            <i data-lucide="message-square-plus" class="w-5 h-5 text-blue-600"></i>
+                            <span>실시간 익명 추천 하러가기</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 실시간 최근 추천글 Top 5 대시보드 -->
+            <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
+                <div class="bg-white rounded-3xl p-6 md:p-8 border border-slate-200 shadow-sm">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-3">
+                        <div class="flex items-center space-x-2.5">
+                            <span class="flex h-3 w-3 relative">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
+                            </span>
+                            <h3 class="text-xl font-bold text-slate-900 impact-title">실시간 추천 게시판 최신글 (TOP 5)</h3>
+                        </div>
+                        <button @click="currentTab = 'board'" class="text-xs font-bold text-blue-600 hover:underline flex items-center space-x-1">
+                            <span>전체 게시판 가기</span>
+                            <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+
+                    <!-- 데스크톱용 표 형식 리스트 -->
+                    <div class="hidden md:block overflow-x-auto">
+                        <table class="w-full text-left text-sm text-slate-600">
+                            <thead class="bg-slate-50 text-xs text-slate-400 uppercase font-bold border-b border-slate-100">
+                                <tr>
+                                    <th class="px-4 py-3 rounded-l-xl">글 제목</th>
+                                    <th class="px-4 py-3">작성자</th>
+                                    <th class="px-4 py-3 text-center">등록일</th>
+                                    <th class="px-4 py-3 text-center">조회수</th>
+                                    <th class="px-4 py-3 text-center rounded-r-xl">추천수</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <tr 
+                                    v-for="post in recentPosts" 
+                                    :key="post.id" 
+                                    @click="openPostDetail(post)" 
+                                    class="hover:bg-blue-50/40 cursor-pointer transition-all duration-150"
+                                >
+                                    <td class="px-4 py-4 font-semibold text-slate-800 hover:text-blue-600 max-w-xs truncate">
+                                        {{ post.title }}
+                                    </td>
+                                    <td class="px-4 py-4 text-xs font-medium text-slate-500">
+                                        {{ post.nickname }}
+                                    </td>
+                                    <td class="px-4 py-4 text-center text-xs text-slate-400">
+                                        {{ post.date }}
+                                    </td>
+                                    <td class="px-4 py-4 text-center text-xs text-slate-500">
+                                        <span class="inline-flex items-center space-x-1 justify-center">
+                                            <i data-lucide="eye" class="w-3.5 h-3.5 text-slate-300"></i>
+                                            <span>{{ post.views || 0 }}</span>
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-4 text-center text-xs text-rose-600 font-bold">
+                                        <span class="inline-flex items-center space-x-1 justify-center">
+                                            <i data-lucide="heart" class="w-3.5 h-3.5 fill-rose-500 text-rose-500"></i>
+                                            <span>{{ post.likes }}</span>
+                                        </span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- 모바일용 카드 리스트 -->
+                    <div class="block md:hidden space-y-3">
+                        <div 
+                            v-for="post in recentPosts" 
+                            :key="post.id" 
+                            @click="openPostDetail(post)" 
+                            class="p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-blue-200 transition"
+                        >
+                            <div class="flex items-center justify-end mb-2">
+                                <span class="text-[10px] text-slate-400">{{ post.date }}</span>
+                            </div>
+                            <h4 class="text-sm font-bold text-slate-800 line-clamp-1 mb-2">{{ post.title }}</h4>
+                            <div class="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-200/50">
+                                <span>작성자: {{ post.nickname }}</span>
+                                <div class="flex items-center space-x-3">
+                                    <span class="flex items-center space-x-1">
+                                        <i data-lucide="eye" class="w-3.5 h-3.5 text-slate-300"></i>
+                                        <span>{{ post.views || 0 }}</span>
+                                    </span>
+                                    <span class="flex items-center space-x-1 text-rose-600 font-bold">
+                                        <i data-lucide="heart" class="w-3.5 h-3.5 fill-rose-500 text-rose-500"></i>
+                                        <span>{{ post.likes }}</span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- 2. 구미 종합 정보 디렉토리 탭 -->
+        <div v-if="currentTab === 'directory'" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 fade-in">
+            <div class="border-b border-slate-200 pb-5 mb-8 flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+                <div>
+                    <h2 class="text-3xl impact-title text-slate-900">구미 종합 라이프&투어 디렉토리</h2>
+                    <p class="text-sm text-slate-500 mt-1">카드를 누르면 상세 장소 정보와 구미 지도를 즉시 확인하실 수 있습니다.</p>
+                </div>
+                <!-- 8대 분야 카테고리 셀렉터 -->
+                <div class="flex items-center space-x-2 bg-white p-1 rounded-xl border border-slate-200 shadow-sm max-w-full overflow-x-auto">
+                    <button 
+                        @click="activeDirectoryCategory = '전체'"
+                        class="px-3.5 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all"
+                        :class="activeDirectoryCategory === '전체' ? 'bg-slate-950 text-white' : 'text-slate-600 hover:bg-slate-50'"
+                    >
+                        전체 보기
+                    </button>
+                    <button 
+                        v-for="cat in categories"
+                        :key="cat.name"
+                        @click="activeDirectoryCategory = cat.name"
+                        class="px-3.5 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex items-center space-x-1"
+                        :class="activeDirectoryCategory === cat.name ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50'"
+                    >
+                        <i :data-lucide="cat.icon" class="w-3.5 h-3.5"></i>
+                        <span>{{ cat.name }}</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 선택한 카테고리를 포함해 백엔드에서 장소명을 검색합니다. -->
+            <div class="mb-6 bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div class="relative flex-1">
+                        <i data-lucide="search" class="absolute left-3 top-3 w-4 h-4 text-slate-400"></i>
+                        <input
+                            v-model="searchQuery"
+                            type="search"
+                            placeholder="장소명을 입력하세요 (예: 금오산, 전통시장)"
+                            class="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-10 text-sm focus:outline-none focus:border-blue-500 focus:bg-white"
+                        />
+                        <button
+                            v-if="searchQuery"
+                            type="button"
+                            @click="searchQuery = ''"
+                            aria-label="장소 검색어 지우기"
+                            class="absolute right-3 top-2 text-xl leading-6 text-slate-400 hover:text-slate-700"
+                        >×</button>
+                    </div>
+                    <span v-if="searchQuery.trim() && !directorySearchLoading && !directorySearchError" class="text-xs text-slate-500 whitespace-nowrap">
+                        검색 결과 <strong class="text-blue-600">{{ directorySearchTotal }}</strong>개
+                    </span>
+                </div>
+                <div v-if="directorySearchLoading" class="mt-3 flex items-center text-xs text-blue-600">
+                    <span class="w-3 h-3 mr-2 rounded-full border-2 border-blue-200 border-t-blue-600 animate-spin"></span>
+                    서버에서 장소를 검색하고 있습니다.
+                </div>
+                <p v-if="directorySearchError" class="mt-3 text-xs font-semibold text-rose-600">{{ directorySearchError }}</p>
+            </div>
+
+            <!-- 디렉토리 아이템 리스트 그리드 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div 
+                    v-for="item in paginatedDirectoryItems" 
+                    :key="item.id"
+                    @click="openDetailModal(item)"
+                    class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-lg hover:border-blue-400 transition-all duration-300 flex flex-col justify-between cursor-pointer group"
+                >
+                    <div>
+                        <!-- 사진 표시 영역 -->
+                        <div class="h-48 relative overflow-hidden bg-slate-900">
+                            <img 
+                                :src="item.firstimage || 'https://images.unsplash.com/photo-1628155930542-3c7a64e2c833?w=800&auto=format&fit=crop&q=70'" 
+                                :alt="item.name" 
+                                @error="handleImageError"
+                                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                            />
+                            <!-- 그라데이션 오버레이 -->
+                            <div class="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/20 to-transparent"></div>
+                            
+                            <!-- 상단 카테고리 태그 -->
+                            <div class="absolute top-3 left-3 right-3 flex items-center justify-between z-10">
+                                <span class="text-[10px] font-bold uppercase tracking-widest bg-blue-600 text-white px-2.5 py-1 rounded shadow-sm">
+                                    {{ item.category }}
+                                </span>
+                            </div>
+
+                            <!-- 이미지 하단 텍스트 겹침 배치 -->
+                            <div class="absolute bottom-3 left-3 right-3 z-10">
+                                <h4 class="text-base font-bold text-white tracking-tight drop-shadow-md">{{ item.name }}</h4>
+                            </div>
+                        </div>
+
+                        <!-- 상세 설명 바디 (주소 표시) -->
+                        <div class="p-5">
+                            <p class="text-xs text-slate-500 flex items-center">
+                                <i data-lucide="map-pin" class="w-3.5 h-3.5 text-blue-500 mr-1.5 flex-shrink-0"></i>
+                                <span class="font-medium text-slate-700 leading-relaxed">{{ item.address }}</span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- 하단 정보 태그 -->
+                    <div class="px-5 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                        <span class="text-slate-400 text-xs font-semibold">#구미시_공공데이터</span>
+                        <div class="flex items-center space-x-1 text-xs font-bold text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <span>상세 정보 보기</span>
+                            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 비어있는 데이터 처리 -->
+            <div v-if="!directorySearchLoading && !directorySearchError && filteredDirectoryItems.length === 0" class="text-center py-20 bg-white border border-slate-200 rounded-2xl">
+                <i data-lucide="info" class="w-12 h-12 text-slate-300 mx-auto mb-4"></i>
+                <p class="text-slate-500 text-sm">
+                    {{ searchQuery.trim() ? '검색 조건에 맞는 장소가 없습니다.' : '해당 카테고리에 맞는 데이터가 존재하지 않습니다.' }}
+                </p>
+            </div>
+
+            <nav v-if="!directorySearchLoading && directoryTotalPages > 1" aria-label="디렉토리 페이지" class="mt-10 flex items-center justify-center gap-1.5">
+                <button
+                    @click="directoryPage--"
+                    :disabled="directoryPage === 1"
+                    class="h-9 px-3 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:border-blue-300 hover:text-blue-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                >이전</button>
+                <button
+                    v-for="page in directoryPageNumbers"
+                    :key="page"
+                    @click="directoryPage = page"
+                    :class="directoryPage === page ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600'"
+                    class="w-9 h-9 rounded-lg border text-xs font-bold transition"
+                >{{ page }}</button>
+                <button
+                    @click="directoryPage++"
+                    :disabled="directoryPage === directoryTotalPages"
+                    class="h-9 px-3 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:border-blue-300 hover:text-blue-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                >다음</button>
+            </nav>
+        </div>
+
+        <!-- 3. 실시간 익명 장소 추천 게시판 -->
+        <div v-if="currentTab === 'board'" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 fade-in">
+            <div class="border-b border-slate-200 pb-5 mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                <div>
+                    <h2 class="text-3xl impact-title text-slate-900">익명 장소 추천 게시판</h2>
+                    <p class="text-sm text-slate-500 mt-1">구미시 최고의 숨겨진 보물을 익명으로 자유롭게 추천하고 공유하세요!</p>
+                </div>
+                <button 
+                    @click="showCreateForm = !showCreateForm"
+                    class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-5 py-3 rounded-xl transition flex items-center justify-center space-x-2 shadow-lg shadow-blue-600/20"
+                >
+                    <i :data-lucide="showCreateForm ? 'x' : 'pencil'" class="w-4 h-4"></i>
+                    <span>{{ showCreateForm ? '글쓰기 닫기' : '추천 글 작성하기' }}</span>
+                </button>
+            </div>
+
+            <!-- 글 작성 폼 -->
+            <div v-if="showCreateForm" class="bg-white border-2 border-blue-500/30 rounded-2xl p-6 mb-8 shadow-md">
+                <h3 class="text-lg font-bold text-slate-900 mb-4 flex items-center space-x-2">
+                    <i data-lucide="edit-3" class="text-blue-600 w-5 h-5"></i>
+                    <span>신규 장소 추천 글쓰기</span>
+                </h3>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <!-- 닉네임 -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1.5">닉네임 (익명)</label>
+                        <input 
+                            type="text" 
+                            v-model="newPost.nickname" 
+                            placeholder="예: 금오산날람쥐" 
+                            class="w-full text-sm border border-slate-200 rounded-xl px-4 py-2.5 bg-slate-50 focus:outline-none focus:border-blue-500"
+                        />
+                    </div>
+                    <!-- 비밀번호 -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1.5">비밀번호 (글 수정/삭제시 필요)</label>
+                        <input 
+                            type="password" 
+                            v-model="newPost.password" 
+                            placeholder="4자리 숫자" 
+                            maxlength="4"
+                            class="w-full text-sm border border-slate-200 rounded-xl px-4 py-2.5 bg-slate-50 focus:outline-none focus:border-blue-500"
+                        />
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <!-- 제목 -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1.5">추천 글 제목</label>
+                        <input 
+                            type="text" 
+                            v-model="newPost.title" 
+                            placeholder="추천하고 싶은 핵심 특징을 적어주세요" 
+                            class="w-full text-sm border border-slate-200 rounded-xl px-4 py-2.5 bg-slate-50 focus:outline-none focus:border-blue-500"
+                        />
+                    </div>
+                </div>
+
+                <!-- 추천 글 본문 -->
+                <div class="mb-5">
+                    <label class="block text-xs font-semibold text-slate-500 mb-1.5">상세 추천 이유</label>
+                    <textarea 
+                        v-model="newPost.content" 
+                        rows="4"
+                        placeholder="이곳의 특별한 점, 주차 팁이나 추천 메뉴 및 이용 팁을 자세하게 적어주세요."
+                        class="w-full text-sm border border-slate-200 rounded-xl px-4 py-3 bg-slate-50 focus:outline-none focus:border-blue-500"
+                    ></textarea>
+                </div>
+
+                <!-- 액션 버튼 -->
+                <div class="flex justify-end space-x-2">
+                    <button 
+                        @click="showCreateForm = false"
+                        class="bg-slate-200 text-slate-700 text-sm font-semibold px-5 py-2.5 rounded-xl hover:bg-slate-300 transition"
+                    >
+                        취소
+                    </button>
+                    <button 
+                        @click="submitPost"
+                        class="bg-blue-600 text-white text-sm font-semibold px-6 py-2.5 rounded-xl hover:bg-blue-700 transition shadow-md"
+                    >
+                        추천 글 등록하기
+                    </button>
+                </div>
+            </div>
+
+            <!-- 게시글 검색 바 -->
+            <div class="mb-6 flex justify-end">
+                <div class="relative w-full md:w-72">
+                    <input 
+                        type="text" 
+                        v-model="boardSearchQuery"
+                        placeholder="제목, 장소, 작성자 검색..." 
+                        class="w-full text-xs border border-slate-200 rounded-xl pl-8 pr-9 py-2.5 focus:outline-none focus:border-blue-500"
+                    />
+                    <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-2.5 top-3"></i>
+                    <button
+                        v-if="boardSearchQuery"
+                        type="button"
+                        @click="boardSearchQuery = ''"
+                        aria-label="검색어 지우기"
+                        class="absolute right-2.5 top-2.5 p-0.5 text-slate-400 hover:text-slate-700 transition"
+                    >
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 게시글 리스트 카드형 그리드 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div 
+                    v-for="post in paginatedBoardPosts" 
+                    :key="post.id"
+                    class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between cursor-pointer"
+                    @click="openPostDetail(post)"
+                >
+                    <div>
+                        <!-- 상단 메타데이터 -->
+                        <div class="flex items-center justify-end mb-3.5">
+                            <span class="text-[11px] text-slate-400 font-medium">{{ post.date }}</span>
+                        </div>
+
+                        <!-- 제목 및 추천 장소 -->
+                        <h4 class="text-base font-bold text-slate-900 mb-1">{{ post.title }}</h4>
+                        <p v-if="post.placeName" class="text-xs text-slate-500 mb-4 flex items-center bg-slate-50 p-2 rounded-lg border border-slate-100">
+                            <i data-lucide="map" class="w-3.5 h-3.5 mr-1.5 text-blue-600 flex-shrink-0"></i>
+                            <span class="font-bold text-slate-700">추천 명소:</span> &nbsp; {{ post.placeName }}
+                        </p>
+
+                        <!-- 본문 텍스트 -->
+                        <p class="text-sm text-slate-600 leading-relaxed line-clamp-3 whitespace-pre-wrap mb-6">{{ post.content }}</p>
+                    </div>
+
+                    <!-- 하단 인터랙션 컨트롤 -->
+                    <div class="flex items-center justify-between pt-4 border-t border-slate-100 text-xs" @click.stop>
+                        <span class="text-slate-400 font-medium flex items-center">
+                            <i data-lucide="user" class="w-3.5 h-3.5 mr-1"></i>
+                            익명: {{ post.nickname }}
+                        </span>
+
+                        <div class="flex items-center space-x-3">
+                            <span class="flex items-center space-x-1 text-slate-400 mr-1">
+                                <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                                <span>{{ post.views || 0 }}</span>
+                            </span>
+                            <button @click="likePost(post.id)" class="flex items-center space-x-1 px-2.5 py-1 rounded bg-rose-50 text-rose-600 border border-rose-100 hover:bg-rose-100 transition">
+                                <i data-lucide="heart" class="w-3.5 h-3.5 fill-rose-600 text-rose-600"></i>
+                                <span class="font-bold">{{ post.likes }}</span>
+                            </button>
+                            <button @click="triggerDelete(post)" class="flex items-center space-x-1 px-2 py-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                <span>삭제</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 등록된 글이 없는 케이스 -->
+            <div v-if="filteredBoardPosts.length === 0" class="text-center py-20 bg-white border border-slate-200 rounded-2xl">
+                <i :data-lucide="boardSearchQuery.trim() ? 'search-x' : 'message-square'" class="w-12 h-12 text-slate-300 mx-auto mb-4"></i>
+                <template v-if="boardSearchQuery.trim()">
+                    <p class="text-slate-700 text-sm font-semibold">일치하는 게시글이 없습니다.</p>
+                    <p class="text-slate-400 text-xs mt-1">다른 검색어를 입력하거나 검색어를 지워보세요.</p>
+                    <button @click="boardSearchQuery = ''" class="mt-4 px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition">
+                        전체 게시글 보기
+                    </button>
+                </template>
+                <p v-else class="text-slate-500 text-sm">등록된 추천 정보가 아직 없습니다. 첫 번째 추천글을 작성해 보세요!</p>
+            </div>
+
+            <nav v-if="boardTotalPages > 1" aria-label="게시판 페이지" class="mt-10 flex items-center justify-center gap-1.5">
+                <button
+                    @click="boardPage--"
+                    :disabled="boardPage === 1"
+                    class="h-9 px-3 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:border-blue-300 hover:text-blue-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                >이전</button>
+                <button
+                    v-for="page in boardPageNumbers"
+                    :key="page"
+                    @click="boardPage = page"
+                    :class="boardPage === page ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600'"
+                    class="w-9 h-9 rounded-lg border text-xs font-bold transition"
+                >{{ page }}</button>
+                <button
+                    @click="boardPage++"
+                    :disabled="boardPage === boardTotalPages"
+                    class="h-9 px-3 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:border-blue-300 hover:text-blue-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                >다음</button>
+            </nav>
+        </div>
+
+        <!-- 4. 구미 AI 비서 탭 -->
+        <div v-if="currentTab === 'ai-assistant'" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 fade-in flex-grow flex flex-col">
+            <div class="border-b border-slate-200 pb-5 mb-6 flex-shrink-0">
+                <div class="flex items-center space-x-2">
+                    <span class="px-2.5 py-0.5 bg-blue-600 text-white text-xs font-bold rounded">AI AGENT</span>
+                    <h2 class="text-3xl impact-title text-slate-900">구미 정보 분석 인텔리전트 AI</h2>
+                </div>
+                <p class="text-sm text-slate-500 mt-1">구미의 8대 분야에 대해 자유롭게 질문해보세요.</p>
+            </div>
+
+            <!-- 대화방 인터페이스 -->
+            <div class="bg-white border border-slate-200 rounded-3xl flex flex-col h-[550px] shadow-sm overflow-hidden">
+                <div class="bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
+                            <i data-lucide="bot" class="w-4 h-4 text-white"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-bold">localhub gumi AI Assistant</h4>
+                            <p class="text-[10px] text-slate-400">구미 특화 지능형 브리핑 지원</p>
+                        </div>
+                    </div>
+                    <button @click="clearMessages" class="text-xs text-slate-400 hover:text-white flex items-center space-x-1">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                        <span>대화 지우기</span>
+                    </button>
+                </div>
+
+                <div ref="chatContainer" class="flex-grow p-6 overflow-y-auto space-y-4 bg-slate-50">
+                    <div class="flex items-start space-x-3">
+                        <div class="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center flex-shrink-0">
+                            <i data-lucide="bot" class="w-4 h-4"></i>
+                        </div>
+                        <div class="bg-white p-4 rounded-2xl border border-slate-200 text-sm text-slate-700 shadow-sm max-w-[85%] leading-relaxed">
+                            안녕하세요! 구미시 맞춤형 스마트 AI 안내 비서입니다. 🖐️ <br>
+                            구미시의 8대 핵심 정보와 추천 게시판에 대해 궁금한 점을 물어보시면 상세히 대답해 드릴게요!
+                            <div class="mt-4 flex flex-wrap gap-2">
+                                <button v-for="q in promptSuggestions" :key="q" @click="useSuggestion(q)" class="text-xs bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg border border-blue-100 hover:bg-blue-100 transition font-medium">"{{ q }}"</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-for="(msg, idx) in chatMessages" :key="idx" :class="['flex items-start space-x-3', msg.role === 'user' ? 'justify-end' : '']">
+                        <div v-if="msg.role !== 'user'" class="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center flex-shrink-0">
+                            <i data-lucide="bot" class="w-4 h-4"></i>
+                        </div>
+                        <div :class="['p-4 rounded-2xl text-sm shadow-sm max-w-[80%] leading-relaxed border', msg.role === 'user' ? 'bg-blue-600 text-white border-blue-500 rounded-tr-none' : 'bg-white text-slate-700 border-slate-200 rounded-tl-none']">
+                            <div class="whitespace-pre-wrap">{{ msg.content }}</div>
+                        </div>
+                        <div v-if="msg.role === 'user'" class="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center flex-shrink-0">
+                            <i data-lucide="user" class="w-4 h-4"></i>
+                        </div>
+                    </div>
+
+                    <div v-if="isAiLoading" class="flex items-start space-x-3">
+                        <div class="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center flex-shrink-0">
+                            <i data-lucide="bot" class="w-4 h-4"></i>
+                        </div>
+                        <div class="bg-white p-4 rounded-2xl border border-slate-200 text-sm text-slate-700 shadow-sm flex items-center space-x-2">
+                            <span class="animate-bounce inline-block w-2 h-2 bg-blue-600 rounded-full"></span>
+                            <span class="animate-bounce inline-block w-2 h-2 bg-blue-600 rounded-full" style="animation-delay: 0.15s"></span>
+                            <span class="animate-bounce inline-block w-2 h-2 bg-blue-600 rounded-full" style="animation-delay: 0.3s"></span>
+                            <span class="text-xs text-slate-400 pl-2">구미시 데이터를 분석 중입니다...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-4 bg-white border-t border-slate-200 flex items-center space-x-2">
+                    <input type="text" v-model="userMessage" @keyup.enter="sendMessage" placeholder="구미 지역에 관해 궁금한 점을 입력해 주세요..." class="flex-grow bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500" :disabled="isAiLoading" />
+                    <button @click="sendMessage" class="bg-blue-600 hover:bg-blue-500 text-white p-3 rounded-xl transition shadow-md shadow-blue-600/20" :disabled="isAiLoading || !userMessage.trim()">
+                        <i data-lucide="send" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 1) 상세 정보 보기 모달창 -->
+    <div v-if="detailModalOpen && selectedItem" class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm">
+        <div class="bg-white rounded-3xl max-w-4xl w-full max-h-[94vh] overflow-y-auto shadow-2xl border border-slate-200 transform transition-all duration-300">
+            <!-- 모달 내 대표 사진 영역 -->
+            <div class="h-64 md:h-96 relative bg-slate-900">
+                <img 
+                    :src="selectedItem.firstimage || 'https://images.unsplash.com/photo-1628155930542-3c7a64e2c833?w=800&auto=format&fit=crop&q=70'" 
+                    :alt="selectedItem.name"
+                    @error="handleImageError"
+                    class="w-full h-full object-cover"
+                />
+                <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent"></div>
+                <button @click="detailModalOpen = false" class="absolute top-4 right-4 text-slate-300 hover:text-white transition bg-slate-900/50 hover:bg-slate-900/80 p-1.5 rounded-full z-20">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+                
+                <div class="absolute bottom-4 left-4 right-4 z-10">
+                    <span class="text-[10px] font-bold bg-blue-600 text-white px-2.5 py-1 rounded shadow-sm">{{ selectedItem.category }}</span>
+                    <h3 class="text-2xl font-black impact-title text-white mt-2">{{ selectedItem.name }}</h3>
+                    <p class="text-xs text-slate-300 mt-1 flex items-center"><i data-lucide="map-pin" class="w-3.5 h-3.5 mr-1 text-blue-400"></i>{{ selectedItem.address }}</p>
+                </div>
+            </div>
+
+            <!-- 모달 바디 -->
+            <div class="p-6 md:p-8 space-y-5">
+                <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                    <div class="flex items-center text-slate-700 text-sm">
+                        <i data-lucide="map" class="w-4 h-4 mr-2.5 text-blue-600 flex-shrink-0"></i>
+                        <span class="font-bold text-slate-500 mr-2 shrink-0">상세 주소:</span>
+                        <span class="font-medium text-slate-800 leading-relaxed">{{ selectedItem.address }}</span>
+                    </div>
+                </div>
+
+                <!-- 하단 버튼 영역 -->
+                <div class="pt-5 flex flex-col sm:flex-row gap-2 justify-end border-t border-slate-100">
+                    <button 
+                        @click="showMapLocation(selectedItem)" 
+                        class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition flex items-center justify-center space-x-1.5 shadow-md shadow-blue-600/10"
+                    >
+                        <i data-lucide="map" class="w-4 h-4"></i>
+                        <span>구미 지도로 위치 보기</span>
+                    </button>
+                    <button 
+                        @click="detailModalOpen = false" 
+                        class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-5 py-2.5 rounded-xl transition"
+                    >
+                        닫기
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 1-2) 익명 장소 추천 글 상세 보기 모달창 -->
+    <div v-if="postDetailModalOpen && selectedPost" class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm">
+        <div class="bg-white rounded-3xl max-w-4xl w-full max-h-[94vh] overflow-y-auto shadow-2xl border border-slate-200 transform transition-all duration-300">
+            <!-- 모달 헤더 -->
+            <div class="bg-slate-900 text-white p-6 md:p-8 relative">
+                <button @click="postDetailModalOpen = false" class="absolute top-4 right-4 text-slate-400 hover:text-white transition">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+                <div class="flex items-center space-x-2">
+                    <span v-if="selectedPost.category" class="text-[10px] font-bold bg-blue-600 text-white px-2 py-0.5 rounded">{{ selectedPost.category }}</span>
+                    <span v-else class="text-[10px] font-bold bg-slate-700 text-slate-300 px-2 py-0.5 rounded">일반 추천</span>
+                    <span class="text-[11px] text-slate-400 font-medium">등록일: {{ selectedPost.date }}</span>
+                </div>
+                <h3 class="text-xl md:text-2xl font-bold impact-title mt-3">{{ selectedPost.title }}</h3>
+                <p v-if="selectedPost.placeName" class="text-xs text-slate-400 mt-2 flex items-center">
+                    <i data-lucide="map-pin" class="w-3.5 h-3.5 mr-1 text-blue-400"></i>
+                    <span class="font-bold text-blue-300">추천 핫플레이스:</span> &nbsp; {{ selectedPost.placeName }}
+                </p>
+            </div>
+
+            <!-- 모달 바디 -->
+            <div class="p-6 md:p-8 space-y-5">
+                <div class="bg-slate-50 p-5 rounded-2xl border border-slate-100 max-h-72 overflow-y-auto">
+                    <p class="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{{ selectedPost.content }}</p>
+                </div>
+
+                <div class="flex items-center justify-between pt-4 border-t border-slate-100 text-xs">
+                    <span class="text-slate-500 font-semibold flex items-center">
+                        <i data-lucide="user" class="w-4 h-4 mr-1 text-slate-400"></i>
+                        작성자 (익명): {{ selectedPost.nickname }}
+                    </span>
+
+                    <div class="flex items-center space-x-4">
+                        <span class="flex items-center space-x-1 text-slate-400">
+                            <i data-lucide="eye" class="w-4 h-4"></i>
+                            <span class="font-bold">{{ selectedPost.views || 0 }}</span>
+                        </span>
+                        <button 
+                            @click="likePost(selectedPost.id)"
+                            class="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100 hover:bg-rose-100 transition"
+                        >
+                            <i data-lucide="heart" class="w-4 h-4 fill-rose-600"></i>
+                            <span class="font-bold">{{ selectedPost.likes }}</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 댓글 목록 및 작성 섹션 -->
+                <div class="pt-4 border-t border-slate-100">
+                    <h4 class="text-xs font-bold text-slate-900 mb-3 flex items-center">
+                        <i data-lucide="messages-square" class="w-4 h-4 mr-1.5 text-blue-600"></i>
+                        <span>한줄 익명 댓글 ({{ (selectedPost.comments || []).length }})</span>
+                    </h4>
+
+                    <!-- 댓글 내용 피드 -->
+                    <div v-if="(selectedPost.comments || []).length > 0" class="space-y-2 mb-4 max-h-64 overflow-y-auto pr-1">
+                        <div v-for="comment in selectedPost.comments" :key="comment.id" class="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-xs flex flex-col justify-between">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="font-bold text-slate-700 flex items-center">
+                                    <i data-lucide="user" class="w-3 h-3 mr-1 text-slate-400"></i>
+                                    {{ comment.nickname }}
+                                </span>
+                                <div class="flex items-center space-x-2 text-slate-400">
+                                    <span>{{ comment.date }}</span>
+                                    <button @click="triggerDeleteComment(selectedPost.id, comment.id)" class="hover:text-red-500 transition">
+                                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <p class="text-slate-600 whitespace-pre-wrap pl-1">{{ comment.content }}</p>
+                        </div>
+                    </div>
+                    <div v-else class="text-center py-6 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-xs text-slate-400 mb-4">
+                        등록된 댓글이 없습니다. 따뜻한 첫 익명 댓글을 남겨보세요!
+                    </div>
+
+                    <!-- 댓글 입력 폼 -->
+                    <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200/70 flex flex-col gap-2">
+                        <div class="grid grid-cols-2 gap-2">
+                            <input 
+                                type="text" 
+                                v-model="newComment.nickname" 
+                                placeholder="익명 닉네임" 
+                                class="w-full text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:border-blue-500"
+                            />
+                            <input 
+                                type="password" 
+                                v-model="newComment.password" 
+                                placeholder="비밀번호 4자리" 
+                                maxlength="4"
+                                class="w-full text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:border-blue-500"
+                            />
+                        </div>
+                        <div class="flex gap-2">
+                            <textarea 
+                                v-model="newComment.content" 
+                                rows="2"
+                                placeholder="비방 목적이 없는 건강한 댓글 문화를 만들어주세요."
+                                class="flex-grow text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:border-blue-500 resize-none"
+                            ></textarea>
+                            <button 
+                                @click="submitComment(selectedPost.id)"
+                                class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 rounded-lg transition shrink-0 flex items-center justify-center"
+                            >
+                                등록
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-2 flex justify-end">
+                    <button 
+                        @click="postDetailModalOpen = false" 
+                        class="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-6 py-2.5 rounded-xl transition"
+                    >
+                        창 닫기
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 1-3) 카카오 지도 및 스마트 핑 매핑 시각화 모달창 (지도로 위치 보기 기능 유지) -->
+    <div v-if="mapModalOpen && activeMapItem" class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+        <div class="bg-white rounded-3xl max-w-4xl w-full max-h-[94vh] overflow-y-auto shadow-2xl border border-slate-200 transform transition-all duration-300">
+            <!-- 지도 모달 헤더 -->
+            <div class="bg-slate-900 text-white p-5 flex justify-between items-center">
+                <div class="flex items-center space-x-2.5">
+                    <div class="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center">
+                        <i data-lucide="map-pin" class="w-4 h-4 text-white"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold impact-title">{{ activeMapItem.name }} 위치 안내</h3>
+                        <p class="text-[10px] text-slate-400">{{ activeMapItem.address }}</p>
+                    </div>
+                </div>
+                <button @click="closeMapModal" class="text-slate-400 hover:text-white transition">
+                    <i data-lucide="x" class="w-5.5 h-5.5"></i>
+                </button>
+            </div>
+
+            <!-- 지도 렌더링 컨테이너 영역 -->
+            <div class="p-4 md:p-6 bg-slate-950 flex flex-col items-center justify-center relative min-h-[420px] md:min-h-[620px]">
+                <!-- 실제 카카오 지도 렌더링 영역 -->
+                <div class="w-full h-[360px] md:h-[540px] relative bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden">
+                    <!-- 카카오 SDK 전용 컨테이너에는 Vue 요소를 넣지 않습니다. -->
+                    <div id="kakao-map-canvas" class="absolute inset-0 w-full h-full bg-slate-100"></div>
+
+                    <!-- SDK가 준비되는 동안에만 지도 위에 표시되는 로딩 오버레이 -->
+                    <div v-if="!isMapLoaded" class="absolute inset-0 z-10 w-full h-full bg-slate-950 flex items-center justify-center map-grid">
+                        <svg class="absolute inset-0 w-full h-full opacity-35" viewBox="0 0 400 240">
+                            <path d="M 200,0 Q 180,60 210,120 T 170,240" fill="none" stroke="#3b82f6" stroke-width="8" stroke-linecap="round"/>
+                            <path d="M 0,110 Q 100,100 200,115" fill="none" stroke="#1d4ed8" stroke-width="4" stroke-opacity="0.5"/>
+                        </svg>
+
+                        <div class="absolute top-6 left-12 text-[10px] text-slate-600 font-bold uppercase tracking-wider">선산읍 권역</div>
+                        <div class="absolute bottom-6 right-12 text-[10px] text-slate-600 font-bold uppercase tracking-wider">국가 공단지구</div>
+                        <div class="absolute top-1/2 left-6 text-[10px] text-slate-600 font-bold uppercase tracking-wider">금오산맥 권역</div>
+
+                        <div 
+                            class="absolute transition-all duration-500 ease-out flex flex-col items-center"
+                            :style="{ left: fallbackCoords.x, top: fallbackCoords.y }"
+                        >
+                            <span class="absolute inline-flex h-10 w-10 rounded-full bg-blue-500 opacity-40 animate-ping -mt-3.5"></span>
+                            
+                            <div class="z-10 bg-blue-600 text-white p-2.5 rounded-full shadow-lg border-2 border-white transform hover:scale-110 transition cursor-default">
+                                <i data-lucide="map-pin" class="w-5 h-5 fill-white text-blue-600"></i>
+                            </div>
+
+                            <div class="mt-2 bg-slate-900 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg shadow-xl border border-slate-700 whitespace-nowrap text-center">
+                                {{ activeMapItem.name }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 하단 지도 조작 레전드 보드 -->
+                <div class="w-full max-w-md mt-4 flex items-center justify-between text-xs text-slate-500 border-t border-slate-900 pt-3">
+                    <span class="flex items-center space-x-1.5">
+                        <span class="w-2.5 h-2.5 rounded-full inline-block animate-pulse" :class="isMapLoaded ? 'bg-emerald-500' : 'bg-slate-700'"></span>
+                        <span>{{ isMapLoaded ? '실시간 지도 동기화 활성화' : '로컬 물리 좌표 동기화 완료' }}</span>
+                    </span>
+                    <span class="font-mono text-[10px]">COORDS: {{ activeMapItem.mapy }} / {{ activeMapItem.mapx }}</span>
+                </div>
+            </div>
+
+            <!-- 푸터 액션 영역 -->
+            <div class="p-5 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
+                <button 
+                    @click="closeMapModalAndOpenDetail"
+                    class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-5 py-2.5 rounded-xl transition"
+                >
+                    상세페이지로 돌아가기
+                </button>
+                <button 
+                    @click="closeMapModal"
+                    class="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-6 py-2.5 rounded-xl transition shadow"
+                >
+                    지도 닫기
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2) 커스텀 비밀번호 확인 다이얼로그 모달 -->
+    <div v-if="passwordCheckOpen" class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200">
+            <h3 class="text-base font-bold text-slate-900 mb-2 flex items-center space-x-2">
+                <i data-lucide="lock" class="w-5 h-5 text-red-500"></i>
+                <span>게시글 삭제 비밀번호 검증</span>
+            </h3>
+            <p class="text-xs text-slate-500 mb-4">글 작성 시 입력하셨던 4자리 비밀번호를 입력해 주세요.</p>
+            
+            <input 
+                type="password" 
+                v-model="deletePasswordInput" 
+                placeholder="비밀번호 4자리" 
+                maxlength="4"
+                class="w-full text-center tracking-widest text-lg font-bold border border-slate-200 rounded-xl px-4 py-2.5 mb-4 focus:outline-none focus:border-red-500"
+            />
+
+            <!-- 에러 메시지 -->
+            <p v-if="deleteErrorMsg" class="text-xs text-rose-600 font-semibold mb-3 text-center">
+                {{ deleteErrorMsg }}
+            </p>
+
+            <div class="flex justify-end space-x-2">
+                <button 
+                    @click="closeDeleteDialog"
+                    class="bg-slate-100 text-slate-600 text-xs font-bold px-4 py-2 rounded-xl hover:bg-slate-200 transition"
+                >
+                    취소
+                </button>
+                <button 
+                    @click="confirmDeletePost"
+                    class="bg-red-500 text-white text-xs font-bold px-5 py-2 rounded-xl hover:bg-red-600 transition"
+                >
+                    확인 및 삭제
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2-1) 댓글 삭제 비밀번호 검증 모달 -->
+    <div v-if="deleteCommentCheckOpen" class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200">
+            <h3 class="text-base font-bold text-slate-900 mb-2 flex items-center space-x-2">
+                <i data-lucide="lock" class="w-5 h-5 text-red-500"></i>
+                <span>댓글 삭제 비밀번호 검증</span>
+            </h3>
+            <p class="text-xs text-slate-500 mb-4">댓글 작성 시 입력하셨던 4자리 비밀번호를 입력해 주세요.</p>
+            <input type="password" v-model="deleteCommentPasswordInput" placeholder="비밀번호 4자리" maxlength="4" class="w-full text-center tracking-widest text-lg font-bold border border-slate-200 rounded-xl px-4 py-2.5 mb-4 focus:outline-none focus:border-red-500" @keyup.enter="confirmDeleteComment" />
+            <p v-if="deleteCommentErrorMsg" class="text-xs text-rose-600 font-semibold mb-3 text-center">{{ deleteCommentErrorMsg }}</p>
+            <div class="flex justify-end space-x-2">
+                <button @click="closeDeleteCommentDialog" class="bg-slate-100 text-slate-600 text-xs font-bold px-4 py-2 rounded-xl hover:bg-slate-200 transition">취소</button>
+                <button @click="confirmDeleteComment" class="bg-red-500 text-white text-xs font-bold px-5 py-2 rounded-xl hover:bg-red-600 transition">삭제 확인</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3) 커스텀 정보/알림용 모달 -->
+    <div v-if="alertModalOpen" class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl max-w-xs w-full p-6 shadow-2xl border border-slate-200 text-center">
+            <div class="w-12 h-12 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-3">
+                <i data-lucide="alert-circle" class="w-6 h-6"></i>
+            </div>
+            <h4 class="text-base font-bold text-slate-900 mb-2">안내 메시지</h4>
+            <p class="text-xs text-slate-600 leading-relaxed mb-5">{{ alertMessage }}</p>
+            <button 
+                @click="alertModalOpen = false"
+                class="w-full bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold py-2.5 rounded-xl transition"
+            >
+                확인
+            </button>
+        </div>
+    </div>
+
+    <!-- 푸터 -->
+    <footer class="bg-slate-950 text-slate-400 py-12 border-t border-slate-800 flex-shrink-0">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center sm:text-left">
+            <div class="flex flex-col sm:flex-row justify-between items-center border-b border-slate-900 pb-8 mb-8 gap-4">
+                <div>
+                    <h4 class="text-white font-bold text-lg tracking-wide impact-title uppercase">localhub gumi</h4>
+                    <p class="text-xs text-slate-500 mt-1">구미·경북권 8대 관광 데이터 탐색기</p>
+                </div>
+                <div class="flex space-x-4 text-xs">
+                    <a href="#" class="hover:text-white transition">이용약관</a>
+                    <a href="#" class="hover:text-white transition">개인정보처리방침</a>
+                    <a href="https://www.gumi.go.kr" target="_blank" class="hover:text-white transition">구미시청 공식홈페이지</a>
+                </div>
+            </div>
+            <div class="flex flex-col sm:flex-row justify-between text-xs text-slate-600 gap-4">
+                <span>&copy; 2026 localhub gumi. All rights reserved. Powered by Vue 3 & Local Storage DB.</span>
+                <span>Designed for maximum reliability and clean interface.</span>
+            </div>
+        </div>
+    </footer>
+</div>
+
+<!-- 1. 백엔드 전용 연동 스크립트를 먼저 불러옵니다. -->
+<script src="./api.js"></script>
+<!-- 2. 전체 프론트엔드 Vue 3 로직 스크립트를 불러옵니다. -->
+<script src="./app.js"></script>
+
+</body>
+</html>
