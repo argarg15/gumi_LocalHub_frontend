@@ -558,6 +558,12 @@ createApp({
         const apiKeyModalOpen = ref(false);
         const tempApiKey = ref('');
         const fallbackCoords = { x: '50%', y: '50%' };
+        const allMapModalOpen = ref(false);
+        const allMapCategory = ref('전체');
+        const allMapLoading = ref(false);
+        const allMapVisibleCount = ref(0);
+        let allMapInstance = null;
+        let allMapClusterer = null;
 
         // 카카오 주소->좌표 검색 대처 지오코더 보관소
         let geocoderInstance = null;
@@ -583,10 +589,10 @@ createApp({
         };
 
         // 카카오 지도 스크립트 중복 방지 및 안전 로드 구현
-        const loadKakaoMapScript = (apiKey) => {
+        const loadKakaoMapScript = (apiKey, onReady = renderActualKakaoMap) => {
             // 이미 카카오 오브젝트 및 맵 클래스가 있다면 로드 스킵 후 바로 그림
             if (window.kakao && window.kakao.maps && window.kakao.maps.services) {
-                renderActualKakaoMap();
+                onReady();
                 return;
             }
 
@@ -597,7 +603,7 @@ createApp({
                 let checkTimer = setInterval(() => {
                     if (window.kakao && window.kakao.maps && window.kakao.maps.services) {
                         clearInterval(checkTimer);
-                        renderActualKakaoMap();
+                        onReady();
                     }
                 }, 100);
                 return;
@@ -607,7 +613,7 @@ createApp({
             const script = document.createElement('script');
             script.id = 'kakao-map-sdk';
             script.type = 'text/javascript';
-            script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${apiKey}&libraries=services&autoload=false`;
+            script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${apiKey}&libraries=services,clusterer&autoload=false`;
             
             script.onload = () => {
                 if (!window.kakao?.maps) {
@@ -615,7 +621,7 @@ createApp({
                     initFallbackMap();
                     return;
                 }
-                window.kakao.maps.load(renderActualKakaoMap);
+                window.kakao.maps.load(onReady);
             };
             
             script.onerror = () => {
@@ -720,6 +726,86 @@ createApp({
             if (temp) {
                 openDetailModal(temp);
             }
+        };
+
+        const renderAllLocationsMap = () => {
+            const container = document.getElementById('all-locations-map-canvas');
+            if (!container || !window.kakao?.maps?.MarkerClusterer) {
+                allMapLoading.value = false;
+                showToast('전체 지도 오류', '카카오 지도 클러스터 라이브러리를 불러오지 못했습니다.', 'error');
+                return;
+            }
+
+            const locations = directoryItems.value.filter(item => {
+                const latitude = Number(item.mapy);
+                const longitude = Number(item.mapx);
+                const matchesCategory = allMapCategory.value === '전체' || item.category === allMapCategory.value;
+                return matchesCategory && Number.isFinite(latitude) && Number.isFinite(longitude);
+            });
+
+            if (!allMapInstance) {
+                allMapInstance = new kakao.maps.Map(container, {
+                    center: new kakao.maps.LatLng(36.119485, 128.344575),
+                    level: 9
+                });
+                allMapClusterer = new kakao.maps.MarkerClusterer({
+                    map: allMapInstance,
+                    averageCenter: true,
+                    minLevel: 5,
+                    disableClickZoom: false
+                });
+            } else {
+                allMapClusterer.clear();
+            }
+
+            const infowindow = new kakao.maps.InfoWindow();
+            const markers = locations.map(item => {
+                const marker = new kakao.maps.Marker({
+                    position: new kakao.maps.LatLng(Number(item.mapy), Number(item.mapx)),
+                    title: item.name
+                });
+                kakao.maps.event.addListener(marker, 'click', () => {
+                    const safeName = String(item.name || '구미 장소')
+                        .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+                        .replaceAll('"', '&quot;').replaceAll("'", '&#039;');
+                    const safeCategory = String(item.category || '')
+                        .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+                    infowindow.setContent(`<div style="min-width:170px;padding:10px;text-align:center;color:#1e293b;"><strong style="font-size:12px;">${safeName}</strong><br><span style="font-size:10px;color:#64748b;">${safeCategory}</span></div>`);
+                    infowindow.open(allMapInstance, marker);
+                });
+                return marker;
+            });
+
+            allMapClusterer.addMarkers(markers);
+            allMapVisibleCount.value = markers.length;
+            allMapLoading.value = false;
+            requestAnimationFrame(() => {
+                allMapInstance.relayout();
+                allMapInstance.setCenter(new kakao.maps.LatLng(36.119485, 128.344575));
+                allMapInstance.setLevel(allMapCategory.value === '전체' ? 9 : 8);
+            });
+        };
+
+        const openAllLocationsMap = async () => {
+            allMapModalOpen.value = true;
+            allMapLoading.value = true;
+            if (directoryItems.value.length <= 11) await fetchDirectoryItems();
+            await nextTick();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            const key = DEFAULT_KAKAO_MAP_KEY || localStorage.getItem('gumi_kakao_map_key');
+            if (!key) {
+                allMapLoading.value = false;
+                showToast('지도 API 키 필요', 'app.js에 카카오 JavaScript 키를 설정해 주세요.', 'error');
+                return;
+            }
+            loadKakaoMapScript(key, renderAllLocationsMap);
+        };
+
+        const closeAllLocationsMap = () => {
+            if (allMapClusterer) allMapClusterer.clear();
+            allMapClusterer = null;
+            allMapInstance = null;
+            allMapModalOpen.value = false;
         };
 
 
@@ -843,6 +929,13 @@ createApp({
             if (boardPage.value > total) boardPage.value = total;
         });
 
+        watch(allMapCategory, () => {
+            if (allMapModalOpen.value && window.kakao?.maps?.MarkerClusterer) {
+                allMapLoading.value = true;
+                nextTick(renderAllLocationsMap);
+            }
+        });
+
         return {
             tabs,
             currentTab,
@@ -915,6 +1008,12 @@ createApp({
             closeMapModal,
             closeMapModalAndOpenDetail,
             fallbackCoords,
+            allMapModalOpen,
+            allMapCategory,
+            allMapLoading,
+            allMapVisibleCount,
+            openAllLocationsMap,
+            closeAllLocationsMap,
 
             // AI 기능
             chatMessages,
