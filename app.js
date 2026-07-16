@@ -289,14 +289,17 @@ createApp({
         const boardSearchQuery = ref('');
         const boardPage = ref(1);
 
-        // 백엔드가 아직 제공하지 않는 화면 전용 필드(닉네임/좋아요/댓글)를 보관합니다.
+        // 게시글 닉네임은 아직 백엔드 모델에 없어 브라우저에만 보관합니다.
         const BOARD_META_KEY = 'localhub_board_meta_v1';
         const readBoardMeta = () => {
             try { return JSON.parse(localStorage.getItem(BOARD_META_KEY) || '{}'); }
             catch { return {}; }
         };
         const writeBoardMeta = (meta) => localStorage.setItem(BOARD_META_KEY, JSON.stringify(meta));
-        const mergePostMeta = (post) => GumiApi.normalizePost(post, readBoardMeta()[post.id] || {});
+        const mergePostMeta = (post) => {
+            const meta = readBoardMeta()[post.id] || {};
+            return GumiApi.normalizePost(post, { nickname: meta.nickname });
+        };
         const savePostMeta = (postId, changes) => {
             const meta = readBoardMeta();
             meta[postId] = { ...(meta[postId] || {}), ...changes };
@@ -383,7 +386,17 @@ createApp({
         const openPostDetail = async (postOrId) => {
             const postId = typeof postOrId === 'object' ? postOrId.id : postOrId;
             try {
-                selectedPost.value = mergePostMeta(await GumiApi.getPostById(postId));
+                const [post, comments] = await Promise.all([
+                    GumiApi.getPostById(postId),
+                    GumiApi.getComments(postId)
+                ]);
+                selectedPost.value = { ...mergePostMeta(post), comments };
+                const index = boardPosts.value.findIndex(item => item.id === postId);
+                if (index !== -1) {
+                    boardPosts.value[index].views = selectedPost.value.views;
+                    boardPosts.value[index].likes = selectedPost.value.likes;
+                    boardPosts.value[index].commentCount = selectedPost.value.commentCount;
+                }
                 postDetailModalOpen.value = true;
                 nextTick(() => {
                     if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -405,9 +418,7 @@ createApp({
             try {
                 const created = await GumiApi.createPost(newPost.value);
                 savePostMeta(created.id, {
-                    nickname: newPost.value.nickname,
-                    likes: 0,
-                    comments: []
+                    nickname: newPost.value.nickname
                 });
                 showToast("작성 완료", "추천 명소가 성공적으로 익명게시판에 제보되었습니다!", "success");
                 
@@ -422,14 +433,17 @@ createApp({
         };
 
         // 추천 게시글 좋아요 공감
-        const likePost = (postId) => {
-            const post = boardPosts.value.find(p => p.id === postId) || selectedPost.value;
-            if (!post) return;
-            const likes = Number(post.likes || 0) + 1;
-            savePostMeta(postId, { likes });
-            post.likes = likes;
-            if (selectedPost.value?.id === postId) selectedPost.value.likes = likes;
-            showToast("공감 반영", "이 브라우저에 공감이 저장되었습니다.", "success");
+        const likePost = async (postId) => {
+            try {
+                const result = await GumiApi.likePost(postId);
+                const likes = Number(result.likes ?? result.like_count ?? 0);
+                const post = boardPosts.value.find(item => item.id === postId);
+                if (post) post.likes = likes;
+                if (selectedPost.value?.id === postId) selectedPost.value.likes = likes;
+                showToast("공감 반영", "좋아요가 모든 사용자에게 반영되었습니다.", "success");
+            } catch (error) {
+                showToast("공감 실패", "좋아요를 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.", "error");
+            }
         };
 
         // 게시글 삭제 대화상자 띄우기
@@ -477,22 +491,16 @@ createApp({
             if (!newComment.value.content.trim()) return showToast("댓글 실패", "댓글 내용을 입력해 주세요.", "error");
 
             try {
-                const comments = [...(selectedPost.value.comments || []), {
-                    id: `${Date.now()}`,
-                    nickname: newComment.value.nickname,
-                    password: newComment.value.password,
-                    content: newComment.value.content,
-                    date: new Date().toLocaleDateString('ko-KR')
-                }];
-                savePostMeta(postId, { comments });
-                selectedPost.value.comments = comments;
+                const created = await GumiApi.createComment(postId, newComment.value);
+                selectedPost.value.comments = [...(selectedPost.value.comments || []), created];
+                selectedPost.value.commentCount = selectedPost.value.comments.length;
+                const post = boardPosts.value.find(item => item.id === postId);
+                if (post) post.commentCount = selectedPost.value.commentCount;
                 
                 // 댓글 인풋 리셋
                 newComment.value = { nickname: '', password: '', content: '' };
                 showToast("댓글 등록", "소중한 댓글 피드백이 추가되었습니다.", "success");
                 
-                // 보드 목록도 함께 댓글수 갱신되도록 동화
-                await fetchBoardPosts();
             } catch (err) {
                 showToast("댓글 저장 불가", "서버 환경 오류로 댓글을 등록하지 못했습니다.", "error");
             }
@@ -523,33 +531,20 @@ createApp({
             }
 
             const postId = targetPostIdForCommentDelete.value;
-            const post = boardPosts.value.find(p => p.id === postId) || selectedPost.value;
-            if (!post) {
-                deleteCommentErrorMsg.value = "연동할 오리지널 게시글을 찾을 수 없습니다.";
-                return;
-            }
-
-            // 정확히 지우고자 하는 댓글을 매칭 (기존 !== 버그 완전 수정)
-            const comment = post.comments.find(c => c.id === targetCommentIdForDelete.value);
-            if (!comment) {
-                deleteCommentErrorMsg.value = "해당하는 일치 단일 댓글이 존재하지 않습니다.";
-                return;
-            }
-
-            if (comment.password !== deleteCommentPasswordInput.value) {
-                deleteCommentErrorMsg.value = "비밀번호가 올바르지 않습니다.";
-                return;
-            }
-
             try {
-                const comments = post.comments.filter(c => c.id !== targetCommentIdForDelete.value);
-                savePostMeta(postId, { comments });
-                if (selectedPost.value?.id === postId) selectedPost.value.comments = comments;
+                await GumiApi.deleteComment(postId, targetCommentIdForDelete.value, deleteCommentPasswordInput.value);
+                if (selectedPost.value?.id === postId) {
+                    selectedPost.value.comments = selectedPost.value.comments.filter(
+                        comment => comment.id !== targetCommentIdForDelete.value
+                    );
+                    selectedPost.value.commentCount = selectedPost.value.comments.length;
+                }
+                const post = boardPosts.value.find(item => item.id === postId);
+                if (post) post.commentCount = Math.max(0, Number(post.commentCount || 0) - 1);
                 showToast("댓글 제거 성공", "요청하신 익명 댓글 피드백이 안전하게 정리되었습니다.", "success");
                 closeDeleteCommentDialog();
-                await fetchBoardPosts();
             } catch (err) {
-                deleteCommentErrorMsg.value = "서버 통신 실패 또는 비밀번호 오류입니다.";
+                deleteCommentErrorMsg.value = "비밀번호가 다르거나 댓글 삭제 요청이 거부되었습니다.";
             }
         };
 

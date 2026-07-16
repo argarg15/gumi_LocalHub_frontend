@@ -37,9 +37,22 @@ const GumiApi = {
             ...extra,
             id: post.id,
             nickname: extra.nickname || post.nickname || '익명',
-            likes: Number(extra.likes ?? post.likes ?? 0),
-            views: Number(post.views ?? 0),
-            comments: extra.comments || post.comments || [],
+            likes: Number(post.likes ?? post.like_count ?? 0),
+            views: Number(post.views ?? post.view_count ?? 0),
+            commentCount: Number(post.comment_count ?? 0),
+            comments: post.comments || [],
+            createdAt,
+            date: createdAt ? new Date(createdAt).toLocaleDateString('ko-KR') : ''
+        };
+    },
+
+    normalizeComment(comment) {
+        const createdAt = comment.created_at || comment.createdAt;
+        return {
+            ...comment,
+            id: comment.id,
+            postId: comment.post_id,
+            nickname: comment.nickname || '익명',
             createdAt,
             date: createdAt ? new Date(createdAt).toLocaleDateString('ko-KR') : ''
         };
@@ -73,6 +86,34 @@ const GumiApi = {
 
     async deletePost(postId, password) {
         return this.request(`/posts/${postId}`, {
+            method: 'DELETE',
+            body: JSON.stringify({ password })
+        });
+    },
+
+    async likePost(postId) {
+        return this.request(`/posts/${postId}/like`, { method: 'POST' });
+    },
+
+    async getComments(postId, page = 1, size = 100) {
+        const data = await this.request(`/posts/${postId}/comments?page=${page}&size=${size}`);
+        return (data?.items || []).map(comment => this.normalizeComment(comment));
+    },
+
+    async createComment(postId, comment) {
+        const created = await this.request(`/posts/${postId}/comments`, {
+            method: 'POST',
+            body: JSON.stringify({
+                nickname: comment.nickname,
+                password: comment.password,
+                content: comment.content
+            })
+        });
+        return this.normalizeComment(created);
+    },
+
+    async deleteComment(postId, commentId, password) {
+        return this.request(`/posts/${postId}/comments/${commentId}`, {
             method: 'DELETE',
             body: JSON.stringify({ password })
         });
